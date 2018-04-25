@@ -15,6 +15,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.IOException;
+import java.util.logging.FileHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -84,11 +90,16 @@ public class SNACJavaParser extends javax.swing.JFrame {
 	 * Creates an instance of this GUI and starts the example
 	 * 
 	 * @param args Command-line arguments
+	 * @throws IOException 
+	 * @throws SecurityException 
 	 */
-	public static void main(String[] args) {
+	public static void main(String[] args) throws SecurityException, IOException {
 		//Mac Niceness
-		System.setProperty("com.apple.mrj.application.apple.menu.about.name", "SNAC EAC-CPF Parse Utility");
+		System.setProperty("com.apple.mrj.application.apple.menu.about.name", "SNAC EAC-CPF Utility");
 
+		Handler fh = new FileHandler("log2.txt");
+	    Logger.getLogger("").addHandler(fh);
+	    Logger.getLogger("").setLevel(Level.INFO);
 
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
@@ -124,7 +135,7 @@ public class SNACJavaParser extends javax.swing.JFrame {
 				getContentPane().add(title, BorderLayout.NORTH);
 				title.setSize(700, 100);
 				{
-					titleLabel = new JLabel("<html><body style='text-align: center; font-size: 25px;'>SNAC EAC-CPF Parse Utility</body></html>", SwingConstants.CENTER);
+					titleLabel = new JLabel("<html><body style='text-align: center;'><p style='font-size: 25px;'>SNAC EAC-CPF Utility</p><p style='color: #B40404'>Pre-Alpha Test Version</p></body></html>", SwingConstants.CENTER);
 					title.add(titleLabel);
 					titleLabel.setPreferredSize(new java.awt.Dimension(700, 100));
 				}
@@ -184,7 +195,7 @@ public class SNACJavaParser extends javax.swing.JFrame {
 				{
 					toJSONFileLocationLabel = new JLabel();
 					parserPanel.add(toJSONFileLocationLabel);
-					toJSONFileLocationLabel.setText("<choose>");
+					toJSONFileLocationLabel.setText("<optional>");
 				}
 				{
 					toJSONFileButton = new JButton();
@@ -213,11 +224,46 @@ public class SNACJavaParser extends javax.swing.JFrame {
 					parserPanel.add(jSeparator2);
 					jSeparator2.setPreferredSize(new java.awt.Dimension(700, 6));
 				}
+				{
+					parseWithSNAC = new JButton();
+					parserPanel.add(parseWithSNAC);
+					parseWithSNAC.setText("Schematron Validate");
+					parseWithSNAC.addActionListener(new ActionListener() {
+						public void actionPerformed(ActionEvent evt) {
+							// If a to and from file are set, then stand up a reconcile worker to
+							// do the work and reconcile against snac.  This GUI will be updated on
+							// the progress of the worker.
+							if (fromXMLFile != null) {
+								parseProgressBar.setValue(0);
+								parseProgressLabel.setText("Starting...");
+								try {
+									// do the reconcile loop in the background
+									final SNACJavaSchematronValidator rw = new SNACJavaSchematronValidator(fromXMLFile, toJSONFile, true);        
+									rw.addPropertyChangeListener(new PropertyChangeListener() {
+
+										@Override
+										public void propertyChange(
+												PropertyChangeEvent evt) {
+											if ("progress" == evt.getPropertyName()) {
+												int progress = (Integer) evt.getNewValue();
+												parseProgressBar.setValue(progress);
+												parseProgressLabel.setText(rw.getProgressText());
+											} 
+										}
+									});
+									rw.execute();
+								} catch (Exception e) {
+									// Silently ignoring errors
+								}
+							}
+						}
+					});
+				}
 				// Reconcile with SNAC button
 				{
 					parseWithSNAC = new JButton();
 					parserPanel.add(parseWithSNAC);
-					parseWithSNAC.setText("Parse with SNAC's REST EAC-CPF Parser");
+					parseWithSNAC.setText("Parse with SNAC");
 					parseWithSNAC.addActionListener(new ActionListener() {
 						public void actionPerformed(ActionEvent evt) {
 							// If a to and from file are set, then stand up a reconcile worker to
@@ -225,6 +271,8 @@ public class SNACJavaParser extends javax.swing.JFrame {
 							// the progress of the worker.
 							if (fromXMLFile != null) {
 								try {
+									parseProgressBar.setValue(0);
+									parseProgressLabel.setText("Starting...");
 									// do the reconcile loop in the background
 									final SNACJavaParserWorker rw = new SNACJavaParserWorker(fromXMLFile, toJSONFile, true);        
 									rw.addPropertyChangeListener(new PropertyChangeListener() {
@@ -273,6 +321,7 @@ public class SNACJavaParser extends javax.swing.JFrame {
 			}
 			this.setSize(700, 400);
 			this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+			this.setTitle("SNAC EAC-CPF Utility");
 		} catch (Exception e) {
 			// Silently ignoring errors
 		}

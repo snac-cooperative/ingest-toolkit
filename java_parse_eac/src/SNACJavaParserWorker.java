@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 
 import javax.swing.SwingWorker;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 
@@ -131,7 +132,7 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 		String base64Encoded = new String(Base64.getEncoder().encode(xmlContents.getBytes()));
 		
 		setProgress(20);
-		setProgressText("Querying SNAC");
+		setProgressText("Querying SNAC-Alpha");
 
 
 
@@ -146,7 +147,7 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 
 		//System.err.println(query);
 		// Perform connection to SNAC
-		HttpURLConnection httpcon = (HttpURLConnection) ((new URL("http://hott.iath.virginia.edu/snac_server/rest/").openConnection()));
+		HttpURLConnection httpcon = (HttpURLConnection) ((new URL("http://snac-dev.iath.virginia.edu/alpha/rest/").openConnection()));
 		httpcon.setDoOutput(true);
 		httpcon.setRequestProperty("Content-Type", "application/json");
 		httpcon.setRequestMethod("PUT");
@@ -154,7 +155,7 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 		
 		
 		setProgress(50);
-		setProgressText("Reading response from SNAC");
+		setProgressText("Reading response from SNAC-Alpha");
 
 		// Write the query to the RestAPI
 		byte[] outputBytes = query.getBytes("UTF-8");
@@ -166,17 +167,35 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 
 
 		// Read the response from the RestAPI
-		InputStream in = new BufferedInputStream(httpcon.getInputStream());
-		String resultStr = org.apache.commons.io.IOUtils.toString(in, "UTF-8");
-		JSONObject resultObj = new JSONObject(resultStr);
-		in.close();
-
+		String resultStr = null;
+		try {
+			InputStream in = new BufferedInputStream(httpcon.getInputStream());
+			resultStr = org.apache.commons.io.IOUtils.toString(in, "UTF-8");
+			in.close();
+		} catch (Exception e) {
+			e.printStackTrace(System.err);
+			setProgress(99);
+			setProgressText("SNAC-Alpha could not parse input: Invalid XML File");
+			return;
+		}
+		
 		setProgress(65);
+		JSONObject resultObj = null;
+		try {
+			resultObj = new JSONObject(resultStr);
+		} catch (JSONException je) {
+			setProgress(99);
+			setProgressText("SNAC-Alpha returned with an error");
+			System.err.println(resultStr);
+			return;
+		}
+
+		setProgress(70);
 		// Close the connection
 		httpcon.disconnect();
 		
 		
-		setProgress(70);
+		setProgress(75);
 		setProgressText("Parsing response from SNAC");
 
 		// If reconciliation succeeded, then process the results
@@ -187,14 +206,14 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 			writer = new FileWriter(toFile);
 		
 		if (resultObj.has("constellation") && resultObj.has("result")) {		
-			setProgress(75);
+			setProgress(85);
 			setProgressText("Writing JSON file from SNAC");
 			
 			if (writer != null)
 				writer.write(resultObj.getJSONObject("constellation").toString(4));
 
 			if (displayResult)
-				SNACJavaParserConstellationWindow.showConstellation(resultObj.getJSONObject("constellation").toString(4));
+				SNACInfoWindow.showWindow("Parsed Constellation" ,resultObj.getJSONObject("constellation").toString(4));
 		}
 		
 		// Close the CSV Writer
@@ -222,7 +241,7 @@ public class SNACJavaParserWorker extends SwingWorker<Void, Void> {
 		
 		
 		if (!errors.isEmpty())
-			SNACJavaParserErrorWindow.showErrors(errors);
+			SNACInfoWindow.showWindow("Parse Errors", errors);
 
 	}
 }
